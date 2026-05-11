@@ -1,0 +1,46 @@
+// backend/prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String?   // Hashed password
+  picture       String?
+  emailVerified Boolean   @default(false)
+  roles         String[]  @default(["user"])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model OAuthClient {
+  id            String   @id @default(cuid())
+  clientId      String   @unique
+  clientSecret  String
+  name          String
+  redirectUris  String[]
+  grants        String[] @default(["authorization_code", "refresh_token"])
+  scopes        String[]
+  createdAt     DateTime @default(now())
+}
+
+model AuthorizationCode {
+  id                String   @id @default(cuid())
+  code              String   @unique
+  clientId          String
+  userId            String
+  redirectUri       String
+  codeChallenge     String?
+  codeChallengeMethod String?
+  scope             String
+  expiresAt         DateTime
+  used              Boolean  @default(false)
+  createdAt         DateTime @default(now())
+}
