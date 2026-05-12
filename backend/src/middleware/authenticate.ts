@@ -1,6 +1,7 @@
 // backend/src/middleware/authenticate.ts
 import { Request, Response, NextFunction } from "express";
-import { TokenService, TokenPayload } from "../services/token.service";
+import jwt from "jsonwebtoken";
+import { TokenService, TokenPayload } from "../services/token.service.js";
 
 declare global {
   namespace Express {
@@ -33,7 +34,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
         error_description: "Access token has expired",
       });
     }
-    
+
     return res.status(401).json({
       error: "invalid_token",
       error_description: "Invalid access token",

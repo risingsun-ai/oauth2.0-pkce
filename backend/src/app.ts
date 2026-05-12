@@ -3,19 +3,24 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import authRoutes from "./routes/auth.routes";
-import apiRoutes from "./routes/api.routes";
-import { errorHandler } from "./middleware/errorHandler";
+import authRoutes from "./routes/auth.routes.js";
+import apiRoutes from "./routes/api.routes.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
+
+const loggerMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.log(`${req.method} ${req.path}`);
+  next();
+};
 
 // Security middleware
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
+    origin: [process.env.FRONTEND_URL, 'http://localhost', '*'],
     credentials: true,
-  })
+  } as cors.CorsOptions)
 );
 
 // Rate limiting
@@ -35,6 +40,8 @@ app.use("/oauth", authLimiter);
 // Body parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// logger 
+app.use(loggerMiddleware);
 
 // Routes
 app.use("/oauth", authRoutes);

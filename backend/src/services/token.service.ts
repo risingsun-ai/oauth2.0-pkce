@@ -1,10 +1,11 @@
 // backend/src/services/token.service.ts
 import jwt from "jsonwebtoken";
-import { oauthConfig } from "../config/auth";
-import { prisma } from "../config/database";
-import { Redis } from "ioredis";
+import { oauthConfig } from "../config/auth.js";
+import { prisma } from "../config/database.js";
+import { redis } from "../config/redis.js";
+import crypto from "crypto";
 
-const redis = new Redis(process.env.REDIS_URL);
+await redis.on('error', (err) => {console.error('Service Redis Client Error:', err)});
 
 export interface TokenPayload {
   sub: string;
@@ -138,7 +139,7 @@ export class TokenService {
   }
 
   // Generate Access Token
-  static generateAccessToken(payload: TokenPayload): string {
+  static generateAccessToken(payload: TokenPayload, clientId?: string): string {
     return jwt.sign(payload, oauthConfig.jwt.privateKey, {
       algorithm: oauthConfig.jwt.algorithm,
       expiresIn: oauthConfig.accessTokenExpiry,
@@ -251,4 +252,5 @@ export class TokenService {
       issuer: oauthConfig.issuer,
     }) as TokenPayload;
   }
+
 }

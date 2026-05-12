@@ -1,6 +1,6 @@
 // backend/src/routes/client.routes.ts
-import { Router, Request, Response } from "express";
-import { prisma } from "../config/database";
+import { Router, Request, Response } from 'express';
+import { prisma } from "../config/database.js";
 import crypto from "crypto";
 
 const router = Router();

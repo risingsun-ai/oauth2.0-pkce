@@ -1,17 +1,18 @@
 // backend/src/routes/auth.routes.ts
 import { Router, Request, Response } from "express";
+import crypto from "crypto";
 import {
   oauthConfig,
   generateCodeVerifier,
   generateCodeChallenge,
   verifyCodeChallenge,
-} from "../config/auth";
-import { TokenService } from "../services/token.service";
-import { prisma } from "../config/database";
-import { Redis } from "ioredis";
+} from "../config/auth.js";
+import { TokenService } from "../services/token.service.js";
+import { prisma } from "../config/database.js";
+import { redis } from "../config/redis.js";
 
 const router = Router();
-const redis = new Redis(process.env.REDIS_URL);
+redis.on('error', (err) => {console.error('Auth Redis Client Error:', err)});
 
 // Authorization Endpoint
 router.get("/authorize", async (req: Request, res: Response) => {

@@ -1,1 +1,9 @@
 POUL.README.md
+node_modules/
+generated/*
+migrations/*
+.env
+backend/.env
+frontend/.env
+backend/dist/
+backend/generated/
