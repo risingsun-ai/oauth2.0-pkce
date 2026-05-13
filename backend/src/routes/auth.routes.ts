@@ -238,4 +238,148 @@ router.get("/.well-known/openid-configuration", (req: Request, res: Response) =>
   });
 });
 
+// User Registration (Signup) endpoint
+router.post("/register", async (req: Request, res: Response) => {
+  try {
+    const { email, password, name } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "email_and_password_required" });
+    }
+    // Check if user exists
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return res.status(409).json({ error: "user_already_exists" });
+    }
+    // Hash password
+    const hashed = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: { email, password: hashed, name },
+      select: { id: true, email: true, name: true },
+    });
+    res.status(201).json(user);
+  } catch (e) {
+    console.error("Signup error:", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// User Login endpoint (for consent page)
+router.post("/login", async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "email_and_password_required" });
+    }
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(401).json({ error: "invalid_credentials" });
+    }
+    // Verify password
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) {
+      return res.status(401).json({ error: "invalid_credentials" });
+    }
+    // Return minimal user info (no password)
+    res.json({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+    });
+  } catch (e) {
+    console.error("Login error:", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// User Registration (Signup) endpoint
+router.post("/register", async (req: Request, res: Response) => {
+  try {
+    const { email, password, name } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "email_and_password_required" });
+    }
+    // Check if user exists
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return res.status(409).json({ error: "user_already_exists" });
+    }
+    // Hash password
+    const hashed = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: { email, password: hashed, name },
+      select: { id: true, email: true, name: true },
+    });
+    res.status(201).json(user);
+  } catch (e) {
+    console.error("Signup error:", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// User Login endpoint (for consent page)
+router.post("/login", async (req: Request, res: Response) => {
+  try {
+    const { email, password, request_id } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "email_and_password_required" });
+    }
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(401).json({ error: "invalid_credentials" });
+    }
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) {
+      return res.status(401).json({ error: "invalid_credentials" });
+    }
+
+    // Retrieve stored auth request to get redirect URI and PKCE data
+    const authRequest = await redis.get(`auth_request:${request_id}`);
+    if (!authRequest) {
+      return res.status(400).json({ error: "auth_request_not_found" });
+    }
+    const { redirectUri, scope, clientId } = JSON.parse(authRequest);
+
+    // Generate authorization code using stored PKCE data
+    const code = await TokenService.generateAuthorizationCode(
+      clientId,
+      user.id,
+      redirectUri,
+      authRequest.codeChallenge,
+      authRequest.codeChallengeMethod || "S256",
+      scope || "openid"
+    );
+
+    // Redirect frontend callback with auth code
+    res.redirect(
+      `${redirectUri}?code=${code}&state=${request_id}`
+    );
+  } catch (e) {
+    console.error("Login error:", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// User Registration (Signup) endpoint
+router.post("/register", async (req: Request, res: Response) => {
+  try {
+    const { email, password, name } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "email_and_password_required" });
+    }
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return res.status(409).json({ error: "user_already_exists" });
+    }
+    const hashed = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: { email, password: hashed, name },
+      select: { id: true, email: true, name: true },
+    });
+    res.status(201).json(user);
+  } catch (e) {
+    console.error("Signup error:", e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
 export default router;

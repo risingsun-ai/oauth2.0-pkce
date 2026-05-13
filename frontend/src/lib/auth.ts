@@ -46,40 +46,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Enable PKCE explicitly
       checks: ["pkce", "state"],
     },
-	// Google - PKCE enabled by default
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-    
-    // GitHub - PKCE enabled by default
-    GitHub({
-      clientId: process.env.GITHUB_CLIENT_ID!,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-    }),
-    
-    // Custom Credentials (for your Express backend)
-    Credentials({
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      authorize: async (credentials) => {
-        // Call your Express backend to verify credentials
-        const res = await fetch(`${process.env.BACKEND_URL}/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(credentials),
-        });
-        
-        const user = await res.json();
-        
-        if (res.ok && user) {
-          return user;
-        }
-        return null;
-      },
-    }),
   ],
   
   // Session configuration
