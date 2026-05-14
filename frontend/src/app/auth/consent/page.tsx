@@ -20,7 +20,7 @@ export default function ConsentPage() {
       const response = await fetch("/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, request_id: requestId }),
       });
 
       if (!response.ok) {
@@ -29,11 +29,16 @@ export default function ConsentPage() {
         return;
       }
 
-      // After successful login, backend should redirect to redirect_uri with code
-      // For now, we simulate by redirecting to the callback with a dummy code
-      // In production, the backend's /login endpoint should handle the redirect
-      const dummyCode = "auth_code_123";
-      router.replace(`/api/auth/callback/custom-oauth?code=${dummyCode}&state=`);
+      const data = await response.json();
+
+      if (data.code && data.redirectUri) {
+        // Redirect to NextAuth callback with auth code and state
+        router.replace(
+          `${data.redirectUri}?code=${data.code}&state=${data.state}`
+        );
+      } else {
+        setError("Unexpected response format");
+      }
     } catch (err) {
       setError("Network error. Please try again.");
       console.error("Login error:", err);
@@ -94,7 +99,8 @@ export default function ConsentPage() {
           <div>
             <button
               type="submit"
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+              disabled={!requestId}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 rounded-md"
             >
               Sign in
             </button>
