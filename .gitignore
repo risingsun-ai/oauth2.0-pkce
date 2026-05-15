@@ -7,3 +7,4 @@ backend/.env
 frontend/.env
 backend/dist/
 backend/generated/
+frontend/.next/

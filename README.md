@@ -330,7 +330,7 @@ npm run dev
 ### 3. Register Your Frontend as an OAuth Client
 
 ```bash
-curl -X POST http://localhost:4000/api/register \
+curl -X POST http://localhost:4000/client/register \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Frontend",

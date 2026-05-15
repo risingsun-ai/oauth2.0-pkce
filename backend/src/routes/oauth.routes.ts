@@ -126,12 +126,19 @@ async function handleAuthorizationCodeGrant(req: Request, res: Response) {
   if (!code || !code_verifier) {
     return res.status(400).json({ error: "invalid_request" });
   }
+  // Retrieve and validate authorization code
+  const codeData = await redis.get(`auth_code:${code}`);
+  if (!codeData) {
+    throw new Error("Invalid or expired authorization code");
+  }
+
+  const authData = JSON.parse(codeData);
 
   try {
     const tokens = await TokenService.exchangeCodeForTokens(
       code,
       code_verifier,
-      client_id,
+      authData.clientId,
       redirect_uri
     );
 
@@ -316,6 +323,7 @@ router.post("/login", async (req: Request, res: Response) => {
       code,
       state: authData.state, // Use original state from auth request
       redirectUri: authData.redirectUri,
+      client_id: authData.clientId,
     });
   } catch (e) {
     console.error("Login error:", e);

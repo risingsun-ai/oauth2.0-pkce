@@ -1,385 +1,280 @@
 // backend/src/routes/auth.routes.ts
 import { Router, Request, Response } from "express";
-import crypto from "crypto";
-import {
-  oauthConfig,
-  generateCodeVerifier,
-  generateCodeChallenge,
-  verifyCodeChallenge,
-} from "../config/auth.js";
+import rateLimit from "express-rate-limit";
 import { TokenService } from "../services/token.service.js";
-import { prisma } from "../config/database.js";
+import { AuthService } from "../services/auth.service.js";
 import { redis } from "../config/redis.js";
+import { authenticate } from "../middleware/authenticate.js";
+import {
+  validateSignup,
+  validateLogin,
+  validateForgotPassword,
+  validateResetPassword,
+} from "../middleware/validate.js";
 
 const router = Router();
-redis.on('error', (err) => {console.error('Auth Redis Client Error:', err)});
 
-// Authorization Endpoint
-router.get("/authorize", async (req: Request, res: Response) => {
+// Rate limiters
+const signupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // 5 signups per hour per IP
+  message: {
+    error: "rate_limit_exceeded",
+    error_description: "Too many signup attempts. Please try again later.",
+  },
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 login attempts per 15 minutes
+  message: {
+    error: "rate_limit_exceeded",
+    error_description: "Too many login attempts. Please try again later.",
+  },
+});
+
+// ==================== NEW AUTH ENDPOINTS ====================
+
+// POST /auth/signup - User Registration
+router.post("/signup", signupLimiter, validateSignup, async (req: Request, res: Response) => {
   try {
-    const {
-      response_type,
-      client_id,
-      redirect_uri,
-      scope,
-      state,
-      code_challenge,
-      code_challenge_method,
-    } = req.query;
+    const { email, password, name } = req.body;
 
-    // Validate required parameters
-    if (response_type !== "code") {
-      return res.status(400).json({ error: "unsupported_response_type" });
-    }
+    const result = await AuthService.signup({ email, password, name });
 
-    if (!client_id || !redirect_uri) {
-      return res.status(400).json({ error: "invalid_request" });
-    }
-
-    // Validate PKCE
-    if (oauthConfig.pkce.required && !code_challenge) {
-      return res.status(400).json({
-        error: "invalid_request",
-        error_description: "PKCE code_challenge is required",
-      });
-    }
-
-    if (code_challenge_method && code_challenge_method !== "S256") {
-      return res.status(400).json({
-        error: "invalid_request",
-        error_description: "Only S256 code_challenge_method is supported",
-      });
-    }
-
-    // Validate client
-    const client = await prisma.oAuthClient.findUnique({
-      where: { clientId: client_id as string },
+    res.status(201).json({
+      success: true,
+      message: "Account created successfully. Please verify your email.",
+      data: result,
     });
+  } catch (error: any) {
+    console.error("Signup error:", error);
 
-    if (!client) {
-      return res.status(401).json({ error: "invalid_client" });
+    if (error.message === "User with this email already exists") {
+      return res.status(409).json({
+        error: "user_exists",
+        error_description: error.message,
+      });
     }
 
-    // Validate redirect URI
-    if (!client.redirectUris.includes(redirect_uri as string)) {
-      return res.status(400).json({ error: "invalid_redirect_uri" });
-    }
-
-    // Store authorization request
-    const requestId = crypto.randomUUID();
-    await redis.setex(
-      `auth_request:${requestId}`,
-      600, // 10 minutes
-      JSON.stringify({
-        clientId: client_id,
-        redirectUri: redirect_uri,
-        scope: scope || "openid",
-        state,
-        codeChallenge: code_challenge,
-        codeChallengeMethod: code_challenge_method || "S256",
-      })
-    );
-
-    // Redirect to login page with request ID
-    // In production, you'd render a login/consent page
-    res.redirect(
-      `${process.env.FRONTEND_URL}/auth/consent?request_id=${requestId}`
-    );
-  } catch (error) {
-    console.error("Authorization error:", error);
-    res.status(500).json({ error: "server_error" });
+    res.status(500).json({
+      error: "server_error",
+      error_description: "Failed to create account. Please try again.",
+    });
   }
 });
 
-// Token Endpoint
-router.post("/token", async (req: Request, res: Response) => {
+// POST /auth/login - User Login
+router.post("/login", loginLimiter, validateLogin, async (req: Request, res: Response) => {
   try {
-    const { grant_type } = req.body;
+    const { email, password } = req.body;
 
-    switch (grant_type) {
-      case "authorization_code":
-        return await handleAuthorizationCodeGrant(req, res);
-      case "refresh_token":
-        return await handleRefreshTokenGrant(req, res);
-      default:
-        return res.status(400).json({ error: "unsupported_grant_type" });
-    }
-  } catch (error) {
-    console.error("Token error:", error);
-    res.status(500).json({ error: "server_error" });
-  }
-});
-
-async function handleAuthorizationCodeGrant(req: Request, res: Response) {
-  const { code, redirect_uri, client_id, code_verifier } = req.body;
-
-  if (!code || !code_verifier) {
-    return res.status(400).json({ error: "invalid_request" });
-  }
-
-  try {
-    const tokens = await TokenService.exchangeCodeForTokens(
-      code,
-      code_verifier,
-      client_id,
-      redirect_uri
-    );
+    const result = await AuthService.login({ email, password });
 
     res.json({
-      access_token: tokens.accessToken,
-      token_type: "Bearer",
-      expires_in: tokens.expiresIn,
-      refresh_token: tokens.refreshToken,
-      id_token: tokens.idToken,
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    console.error("Login error:", error);
+
+    // Generic error message to prevent user enumeration
+    res.status(401).json({
+      error: "invalid_credentials",
+      error_description: "Invalid email or password",
+    });
+  }
+});
+
+// POST /auth/verify-email - Verify Email Address
+router.post("/verify-email", async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        error: "invalid_request",
+        error_description: "Verification token is required",
+      });
+    }
+
+    await AuthService.verifyEmail(token);
+
+    res.json({
+      success: true,
+      message: "Email verified successfully",
     });
   } catch (error: any) {
     res.status(400).json({
-      error: "invalid_grant",
+      error: "invalid_token",
       error_description: error.message,
     });
   }
-}
+});
 
-async function handleRefreshTokenGrant(req: Request, res: Response) {
-  const { refresh_token } = req.body;
-
-  if (!refresh_token) {
-    return res.status(400).json({ error: "invalid_request" });
-  }
-
+// POST /auth/resend-verification - Resend Verification Email
+router.post("/resend-verification", async (req: Request, res: Response) => {
   try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        error: "invalid_request",
+        error_description: "Email is required",
+      });
+    }
+
+    await AuthService.resendVerificationEmail(email);
+
+    // Always return success to prevent user enumeration
+    res.json({
+      success: true,
+      message: "If an account exists with this email, a verification link has been sent.",
+    });
+  } catch (error: any) {
+    res.json({
+      success: true,
+      message: "If an account exists with this email, a verification link has been sent.",
+    });
+  }
+});
+
+// POST /auth/forgot-password - Request Password Reset
+router.post("/forgot-password", validateForgotPassword, async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+
+    await AuthService.forgotPassword(email);
+
+    // Always return success to prevent user enumeration
+    res.json({
+      success: true,
+      message: "If an account exists with this email, a password reset link has been sent.",
+    });
+  } catch (error: any) {
+    res.json({
+      success: true,
+      message: "If an account exists with this email, a password reset link has been sent.",
+    });
+  }
+});
+
+// POST /auth/reset-password - Reset Password
+router.post("/reset-password", validateResetPassword, async (req: Request, res: Response) => {
+  try {
+    const { token, password } = req.body;
+
+    await AuthService.resetPassword(token, password);
+
+    res.json({
+      success: true,
+      message: "Password reset successfully. Please login with your new password.",
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      error: "invalid_token",
+      error_description: error.message,
+    });
+  }
+});
+
+// POST /auth/refresh - Refresh Access Token
+router.post("/refresh", async (req: Request, res: Response) => {
+  try {
+    const { refresh_token } = req.body;
+
+    if (!refresh_token) {
+      return res.status(400).json({
+        error: "invalid_request",
+        error_description: "Refresh token is required",
+      });
+    }
+
     const tokens = await TokenService.refreshAccessToken(refresh_token);
 
     res.json({
-      access_token: tokens.accessToken,
-      token_type: "Bearer",
-      expires_in: tokens.expiresIn,
-      refresh_token: tokens.refreshToken,
+      success: true,
+      data: tokens,
     });
   } catch (error: any) {
-    res.status(400).json({
-      error: "invalid_grant",
-      error_description: error.message,
+    res.status(401).json({
+      error: "invalid_token",
+      error_description: "Invalid or expired refresh token",
     });
   }
-}
+});
 
-// UserInfo Endpoint
-router.get("/userinfo", async (req: Request, res: Response) => {
-  const authHeader = req.headers.authorization;
-  
-  if (!authHeader?.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "unauthorized" });
-  }
-
-  const token = authHeader.substring(7);
-
+// POST /auth/logout - Logout (Revoke Token)
+router.post("/logout", authenticate, async (req: Request, res: Response) => {
   try {
-    const payload = TokenService.verifyAccessToken(token);
-    
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.substring(7);
+
+    // Add token to blacklist
+    if (token) {
+      const decoded = TokenService.verifyAccessToken(token);
+      const ttl = decoded.exp! - Math.floor(Date.now() / 1000);
+      if (ttl > 0) {
+        // const redis = new (await import("ioredis")).default(process.env.REDIS_URL);
+        await redis.setex(`token_blacklist:${token}`, ttl, "revoked");
+      }
+    }
+
+    // Revoke refresh token if provided
+    const { refresh_token } = req.body;
+    if (refresh_token) {
+      // const redis = new (await import("ioredis")).default(process.env.REDIS_URL);
+      await redis.del(`refresh_token:${refresh_token}`);
+    }
+
+    res.json({
+      success: true,
+      message: "Logged out successfully",
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      error: "server_error",
+      error_description: "Failed to logout",
+    });
+  }
+});
+
+// GET /auth/me - Get Current User
+router.get("/me", authenticate, async (req: Request, res: Response) => {
+  try {
+    const { prisma } = await import("../config/database.js");
+
     const user = await prisma.user.findUnique({
-      where: { id: payload.sub },
+      where: { id: req.user!.sub },
       select: {
         id: true,
         email: true,
         name: true,
         picture: true,
+        emailVerified: true,
+        roles: true,
+        createdAt: true,
       },
     });
 
     if (!user) {
-      return res.status(404).json({ error: "user_not_found" });
+      return res.status(404).json({
+        error: "user_not_found",
+        error_description: "User not found",
+      });
     }
 
     res.json({
-      sub: user.id,
-      email: user.email,
-      name: user.name,
-      picture: user.picture,
+      success: true,
+      data: { user },
     });
-  } catch (error) {
-    res.status(401).json({ error: "invalid_token" });
-  }
-});
-
-// JWKS Endpoint (for public key distribution)
-router.get("/.well-known/jwks.json", (req: Request, res: Response) => {
-  // Return public keys for token verification
-  res.json({
-    keys: [
-      {
-        kty: "RSA",
-        use: "sig",
-        alg: "RS256",
-        kid: "key-1",
-        // Add your public key components here
-      },
-    ],
-  });
-});
-
-// OpenID Configuration
-router.get("/.well-known/openid-configuration", (req: Request, res: Response) => {
-  const baseUrl = `${req.protocol}://${req.get("host")}`;
-  
-  res.json({
-    issuer: oauthConfig.issuer,
-    authorization_endpoint: `${baseUrl}/oauth/authorize`,
-    token_endpoint: `${baseUrl}/oauth/token`,
-    userinfo_endpoint: `${baseUrl}/oauth/userinfo`,
-    jwks_uri: `${baseUrl}/oauth/.well-known/jwks.json`,
-    response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code", "refresh_token"],
-    token_endpoint_auth_methods_supported: ["none", "client_secret_post"],
-    code_challenge_methods_supported: ["S256"],
-    scopes_supported: oauthConfig.scopes,
-    subject_types_supported: ["public"],
-    id_token_signing_alg_values_supported: ["RS256"],
-  });
-});
-
-// User Registration (Signup) endpoint
-router.post("/register", async (req: Request, res: Response) => {
-  try {
-    const { email, password, name } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: "email_and_password_required" });
-    }
-    // Check if user exists
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      return res.status(409).json({ error: "user_already_exists" });
-    }
-    // Hash password
-    const hashed = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: { email, password: hashed, name },
-      select: { id: true, email: true, name: true },
+  } catch (error: any) {
+    res.status(500).json({
+      error: "server_error",
+      error_description: "Failed to fetch user",
     });
-    res.status(201).json(user);
-  } catch (e) {
-    console.error("Signup error:", e);
-    res.status(500).json({ error: "server_error" });
   }
 });
 
-// User Login endpoint (for consent page)
-router.post("/login", async (req: Request, res: Response) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: "email_and_password_required" });
-    }
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      return res.status(401).json({ error: "invalid_credentials" });
-    }
-    // Verify password
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) {
-      return res.status(401).json({ error: "invalid_credentials" });
-    }
-    // Return minimal user info (no password)
-    res.json({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-    });
-  } catch (e) {
-    console.error("Login error:", e);
-    res.status(500).json({ error: "server_error" });
-  }
-});
-
-// User Registration (Signup) endpoint
-router.post("/register", async (req: Request, res: Response) => {
-  try {
-    const { email, password, name } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: "email_and_password_required" });
-    }
-    // Check if user exists
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      return res.status(409).json({ error: "user_already_exists" });
-    }
-    // Hash password
-    const hashed = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: { email, password: hashed, name },
-      select: { id: true, email: true, name: true },
-    });
-    res.status(201).json(user);
-  } catch (e) {
-    console.error("Signup error:", e);
-    res.status(500).json({ error: "server_error" });
-  }
-});
-
-// User Login endpoint (for consent page)
-router.post("/login", async (req: Request, res: Response) => {
-  try {
-    const { email, password, request_id } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: "email_and_password_required" });
-    }
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      return res.status(401).json({ error: "invalid_credentials" });
-    }
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) {
-      return res.status(401).json({ error: "invalid_credentials" });
-    }
-
-    // Retrieve stored auth request to get redirect URI and PKCE data
-    const authRequest = await redis.get(`auth_request:${request_id}`);
-    if (!authRequest) {
-      return res.status(400).json({ error: "auth_request_not_found" });
-    }
-    const { redirectUri, scope, clientId } = JSON.parse(authRequest);
-
-    // Generate authorization code using stored PKCE data
-    const code = await TokenService.generateAuthorizationCode(
-      clientId,
-      user.id,
-      redirectUri,
-      authRequest.codeChallenge,
-      authRequest.codeChallengeMethod || "S256",
-      scope || "openid"
-    );
-
-    // Redirect frontend callback with auth code
-    res.redirect(
-      `${redirectUri}?code=${code}&state=${request_id}`
-    );
-  } catch (e) {
-    console.error("Login error:", e);
-    res.status(500).json({ error: "server_error" });
-  }
-});
-
-// User Registration (Signup) endpoint
-router.post("/register", async (req: Request, res: Response) => {
-  try {
-    const { email, password, name } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: "email_and_password_required" });
-    }
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      return res.status(409).json({ error: "user_already_exists" });
-    }
-    const hashed = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: { email, password: hashed, name },
-      select: { id: true, email: true, name: true },
-    });
-    res.status(201).json(user);
-  } catch (e) {
-    console.error("Signup error:", e);
-    res.status(500).json({ error: "server_error" });
-  }
-});
 
 export default router;

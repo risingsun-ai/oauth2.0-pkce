@@ -5,7 +5,7 @@ import { prisma } from "../config/database.js";
 import { redis } from "../config/redis.js";
 import crypto from "crypto";
 
-await redis.on('error', (err) => {console.error('Service Redis Client Error:', err)});
+await redis.on('error', (err) => { console.error('Service Redis Client Error:', err) });
 
 export interface TokenPayload {
   sub: string;
@@ -13,6 +13,7 @@ export interface TokenPayload {
   name: string;
   roles: string[];
   scope: string;
+  audience: string;
 }
 
 export class TokenService {
@@ -26,7 +27,7 @@ export class TokenService {
     scope: string
   ): Promise<string> {
     const code = crypto.randomBytes(32).toString("hex");
-    
+
     // Store code with PKCE data
     await redis.setex(
       `auth_code:${code}`,
@@ -41,7 +42,7 @@ export class TokenService {
         used: false,
       })
     );
-    
+
     return code;
   }
 
@@ -64,7 +65,7 @@ export class TokenService {
     }
 
     const authData = JSON.parse(codeData);
-    
+
     // Check if code was already used
     if (authData.used) {
       // Potential replay attack - revoke all tokens for this user
@@ -78,15 +79,20 @@ export class TokenService {
         .createHash("sha256")
         .update(codeVerifier)
         .digest("base64url");
-      
+
       if (challenge !== authData.codeChallenge) {
         throw new Error("Invalid code verifier");
       }
     }
 
+    // Validate client
+    // if (authData.clientId !== clientId) {
+    //   throw new Error("Invalid client");
+    // }
+
     // Validate client and redirect URI
-    if (authData.clientId !== clientId || authData.redirectUri !== redirectUri) {
-      throw new Error("Invalid client or redirect URI");
+    if (authData.redirectUri !== redirectUri) {
+      throw new Error("Invalid redirect URI");
     }
 
     // Mark code as used
@@ -113,9 +119,10 @@ export class TokenService {
       name: user.name,
       roles: user.roles,
       scope: authData.scope,
+      audience: clientId,
     };
 
-    const accessToken = this.generateAccessToken(payload);
+    const accessToken = this.generateAccessToken(payload, clientId);
     const refreshToken = this.generateRefreshToken(user.id);
     const idToken = this.generateIdToken(payload);
 
@@ -174,6 +181,7 @@ export class TokenService {
         algorithm: oauthConfig.jwt.algorithm,
         expiresIn: oauthConfig.accessTokenExpiry,
         issuer: oauthConfig.issuer,
+        audience: payload.audience,
       }
     );
   }
@@ -212,9 +220,10 @@ export class TokenService {
       name: user.name,
       roles: user.roles,
       scope,
+      audience: clientId,
     };
 
-    const newAccessToken = this.generateAccessToken(payload);
+    const newAccessToken = this.generateAccessToken(payload, clientId);
     const newRefreshToken = this.generateRefreshToken(user.id);
 
     // Store new refresh token

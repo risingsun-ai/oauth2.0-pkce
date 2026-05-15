@@ -1,4 +1,5 @@
 // backend/src/config/auth.ts
+import "dotenv/config";
 import crypto from "crypto";
 
 export const oauthConfig = {
@@ -6,16 +7,16 @@ export const oauthConfig = {
   accessTokenExpiry: 3600, // 1 hour
   refreshTokenExpiry: 30 * 24 * 3600, // 30 days
   authorizationCodeExpiry: 600, // 10 minutes
-  
+
   // PKCE Configuration
   pkce: {
     required: true,
     methods: ["S256"], // Only allow S256 method
   },
-  
+
   // Scopes
   scopes: ["openid", "profile", "email", "read", "write"],
-  
+
   // Token signing
   jwt: {
     secret: process.env.JWT_SECRET!,

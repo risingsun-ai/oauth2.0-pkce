@@ -1,18 +1,33 @@
 import { prisma } from "../lib/prisma";
+import bcrypt from "bcrypt";
 
 async function main() {
+  const johnHashPass = await bcrypt.hash("johns hash pass", 10);
+  const aliceHashPass = await bcrypt.hash("my hash pass", 10);
   // Create a new user with a post
   const user = await prisma.user.create({
     data: {
       name: "John",
       email: "john@prisma.io",
-      password: "johns hash pass",
+      password: johnHashPass,
       picture: "https://example.com/pic.png",
-	  emailVerified: true,
-	  roles: ["Admin", "Default"],
-	  createdAt: new Date(),
-	  updatedAt: new Date(),
-	},
+      emailVerified: true,
+      roles: ["Admin", "Default"],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  });
+  const user2 = await prisma.user.create({
+    data: {
+      name: "alice",
+      email: "alice@prisma.io",
+      password: aliceHashPass,
+      picture: "https://example.com/pic.png",
+      emailVerified: true,
+      roles: ["Admin", "Default"],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
   });
   console.log("Created user:", user);
 

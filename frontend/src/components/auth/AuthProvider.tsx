@@ -1,9 +1,9 @@
 // frontend/src/components/auth/AuthProvider.tsx
 "use client";
 
+import { apiClient } from "@/src/lib/api-client";
 import { SessionProvider, useSession } from "next-auth/react";
 import { useEffect } from "react";
-import { apiClient } from "@/lib/api-client";
 
 function AuthSync({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
