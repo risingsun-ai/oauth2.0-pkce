@@ -1,10 +1,10 @@
 // frontend/src/app/page.tsx
 "use client";
 
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { signOut } from "next-auth/react";
+import { useEffect } from "react";
 
 export default function HomePage() {
   const { data: session, status } = useSession();
@@ -12,6 +12,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
+	  console.log('status ===>> ', status);
       router.push("/api/auth/signin");
     }
   }, [status, router]);
@@ -19,7 +20,7 @@ export default function HomePage() {
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
       </div>
     );
   }
@@ -34,12 +35,12 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <h1 className="text-xl font-semibold">Dashboard</h1>
+              <h1 className="text-xl font-semibold">Home</h1>
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-gray-700">Welcome, {session.user?.name}</span>
               <button
-                onClick={() => signOut({ callbackUrl: "/auth/signin" })}
+                onClick={() => signOut({ callbackUrl: "/api/auth/signin" })}
                 className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700"
               >
                 Sign Out

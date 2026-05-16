@@ -10,6 +10,9 @@ import { TokenService } from "../services/token.service.js";
 import { prisma } from "../config/database.js";
 import { redis } from "../config/redis.js";
 import console from "console";
+import { validateForgotPassword, validateLogin, validateResetPassword, validateSignup } from "../middleware/validate.js";
+import { authenticate } from "../middleware/authenticate.js";
+import { AuthService } from "../services/auth.service.js";
 
 const router = Router();
 
@@ -20,6 +23,25 @@ const oauthLimiter = rateLimit({
   message: {
     error: "rate_limit_exceeded",
     error_description: "Too many requests. Please try again later.",
+  },
+});
+
+// Rate limiters
+const oauthRegisterLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // 5 user registration per hour per IP
+  message: {
+    error: "rate_limit_exceeded",
+    error_description: "Too many registration attempts. Please try again later.",
+  },
+});
+
+const oauthLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 login attempts per 15 minutes
+  message: {
+    error: "rate_limit_exceeded",
+    error_description: "Too many login attempts. Please try again later.",
   },
 });
 
@@ -104,6 +126,7 @@ router.get("/authorize", oauthLimiter, async (req: Request, res: Response) => {
 // Token Endpoint
 router.post("/token", async (req: Request, res: Response) => {
   try {
+    console.log('TOKEN : ', req.body);
     const { grant_type } = req.body;
 
     switch (grant_type) {
@@ -258,7 +281,7 @@ router.get("/.well-known/openid-configuration", (req: Request, res: Response) =>
 // ==================== LEGACY AUTH ENDPOINTS ====================
 
 // User Registration (Signup) endpoint
-router.post("/register", async (req: Request, res: Response) => {
+router.post("/register", oauthRegisterLimiter, validateSignup, async (req: Request, res: Response) => {
   try {
     const { email, password, name } = req.body;
     if (!email || !password) {
@@ -284,7 +307,7 @@ router.post("/register", async (req: Request, res: Response) => {
 
 
 // User Login endpoint (for consent page)
-router.post("/login", async (req: Request, res: Response) => {
+router.post("/login", oauthLoginLimiter, validateLogin, async (req: Request, res: Response) => {
   try {
     const { email, password, request_id } = req.body;
 
@@ -295,8 +318,14 @@ router.post("/login", async (req: Request, res: Response) => {
     if (!user) {
       return res.status(401).json({ error: "invalid_credentials" });
     }
+
+    // Check if user has password (might be OAuth-only user)
+    if (!user.password) {
+      throw new Error("This account uses social login. Please sign in with your social provider.");
+    }
+
     const valid = await bcrypt.compare(password, user.password);
-    console.log("login===>", valid);
+
     if (!valid) {
       return res.status(401).json({ error: "invalid_credentials" });
     }

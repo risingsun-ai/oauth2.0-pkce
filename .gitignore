@@ -7,4 +7,6 @@ backend/.env
 frontend/.env
 backend/dist/
 backend/generated/
-frontend/.next/
+frontend/.next/CLAUDE.local.md
+CLAUDE.local.md
+frontend/.next/*

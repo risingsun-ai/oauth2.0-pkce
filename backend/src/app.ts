@@ -3,7 +3,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import authRoutes from "./routes/auth.routes.js";
+import accountRoutes from "./routes/account.mgt.routes.js";
 import oauthRoutes from "./routes/oauth.routes.js";
 import apiRoutes from "./routes/api.routes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -39,7 +39,7 @@ const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
 });
-app.use("/oauth", authLimiter);
+app.use("/auth", authLimiter);
 
 // Body parsing
 app.use(express.json());
@@ -49,8 +49,8 @@ app.use(loggerMiddleware);
 
 // Routes
 app.use("/client", clientRoutes);
-app.use("/oauth", oauthRoutes);
-app.use("/auth", authRoutes);
+app.use("/auth", oauthRoutes);
+app.use("/account", accountRoutes);
 app.use("/api", apiRoutes);
 
 // Error handling

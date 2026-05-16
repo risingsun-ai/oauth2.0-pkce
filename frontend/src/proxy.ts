@@ -1,6 +1,7 @@
 // frontend/src/middleware.ts (Next.js 16 compatible)
 
 import { NextResponse } from "next/server"
+
 import { auth } from "./lib/auth";
 
 export const proxy = auth((req) => {
@@ -22,7 +23,7 @@ export const proxy = auth((req) => {
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
   console.info(`USER DATA: `, req.auth?.expires);
 
-  if (isApi) return; // NextAuth handles /api/auth
+  // if (isApi) return; // NextAuth handles /api/auth
 
   // const token = request.nextauth?.token;
   // const { pathname } = request.nextUrl;

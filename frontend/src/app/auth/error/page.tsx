@@ -1,8 +1,8 @@
 // frontend/src/app/auth/error/page.tsx
 "use client";
 
-import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 export default function AuthErrorPage() {
   const searchParams = useSearchParams();
@@ -60,7 +60,7 @@ export default function AuthErrorPage() {
 
         <div className="space-y-4">
           <Link
-            href="/auth/signin"
+            href="/api/auth/signin"
             className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             Try Again

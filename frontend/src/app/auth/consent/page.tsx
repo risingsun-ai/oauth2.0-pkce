@@ -17,7 +17,7 @@ export default function ConsentPage() {
     setError("");
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/oauth/login`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, request_id: requestId }),
@@ -30,16 +30,13 @@ export default function ConsentPage() {
       }
 
       const data = await response.json();
-      console.log("redirecting 1 to Login page:", data);
 
       if (data.code && data.redirectUri) {
-        console.log("redirecting 2 to Login page:", data.redirectUri);
+        // console.log("redirecting 2 to Login page:", data.redirectUri);
         // Redirect to NextAuth callback with auth code and state
-        router.replace(`/api/auth/callback/custom-oauth?code=${data.code}&state=${data.state}&client_id=${data.client_id}`);
-        // router.replace(
-        //   `${data.redirectUri}?code=${data.code}&state=${data.state}&client_id=${data.client_id}`
-        // );
-        // router.refresh();
+        // router.replace(`/api/auth/callback/custom-oauth?code=${data.code}&state=${data.state}&client_id=${data.client_id}`);
+        router.replace(`${data.redirectUri}?code=${data.code}&state=${data.state}&client_id=${data.client_id}`);
+         router.refresh();
       } else {
         setError("Unexpected response format");
       }

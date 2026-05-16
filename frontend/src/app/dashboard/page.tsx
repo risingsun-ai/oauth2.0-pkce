@@ -1,10 +1,10 @@
 // frontend/src/app/dashboard/page.tsx
 "use client";
 
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { signOut } from "next-auth/react";
+import { useEffect } from "react";
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -19,7 +19,7 @@ export default function DashboardPage() {
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
       </div>
     );
   }

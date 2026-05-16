@@ -46,7 +46,8 @@ Core components in `backend/src/`:
 - `config/database.ts` — Prisma client with PostgreSQL adapter
 - `config/redis.ts` — Redis client singleton
 - `services/token.service.ts` — Token generation/exchange logic
-- `routes/auth.routes.ts` — OAuth endpoints (`/oauth/*`)
+- `routes/oauth.routes.ts` — OAuth endpoints (`/auth/*`)
+- `routes/account.mgt.routes.ts` — Accounts Managment endpoints (`/account/*`)
 - `routes/client.routes.ts` — OAuth client registration
 - `routes/api.routes.ts` — Protected API endpoints (`/api/*`)
 - `middleware/authenticate.ts` — JWT auth, scope/role guards

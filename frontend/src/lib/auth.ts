@@ -1,41 +1,8 @@
 // frontend/src/lib/auth.ts
 import NextAuth from "next-auth";
-import { JWT } from "next-auth/jwt";
 import { Session } from "next-auth";
+import { JWT } from "next-auth/jwt";
 
-async function makeTokenRequest(context: any) {
-  console.log("params: ", context.params)
-  console.log('host: ', process.env.BACKEND_URL, 'nextAuthUrl: ', process.env.NEXTAUTH_URL)
-
-  const formData = new URLSearchParams();
-  formData.append('grant_type', 'authorization_code')
-  formData.append('code', context.params.code)
-  formData.append('client_id', `${process.env.OAUTH_CLIENT_ID}`)
-  formData.append('redirect_uri', `${process.env.NEXTAUTH_URL}/api/auth/callback/custom-oauth`)
-  formData.append('code_verifier', context.authorization.code_verifier)
-
-  console.log('formData: ' + formData)
-
-  const url = `${process.env.BACKEND_URL}/oauth/token`
-  const request = await fetch(url, {
-
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams(formData)
-
-  }).then(function (response) {
-    console.log('url: ' + url + ", formData: " + formData.toString());
-    var json = response.json();
-    console.log('response: ' + json)
-
-    return json;
-  }).then(function (data) {
-    return data;
-  });
-  return request;
-}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -47,12 +14,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       issuer: process.env.OAUTH_ISSUER,
       clientId: process.env.OAUTH_CLIENT_ID,
       clientSecret: process.env.OAUTH_CLIENT_SECRET,
-      wellKnown: `${process.env.BACKEND_URL}/oauth/.well-known/openid-configuration`,
-      // redirectProxyUrl: `${process.env.NEXTAUTH_URL}`,
+      wellKnown: `${process.env.BACKEND_URL}/auth/.well-known/openid-configuration`,
 
       // Enable PKCE
       authorization: {
-        url: `${process.env.BACKEND_URL}/oauth/authorize`,
+        url: `${process.env.BACKEND_URL}/auth/authorize`,
         params: {
           scope: "openid profile email",
           response_type: "code",
@@ -62,26 +28,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
       // Token endpoint configuration
       token: {
-        url: `${process.env.BACKEND_URL}/oauth/token`,
-        // params: {
-        //   redirect_uri: context.provider.callbackUrl,
-        //   code: context.authorization.code,
-        //   client_id: context.client.clientId,
-        //   code_verifier: context.authorization.code_verifier,
-        //   grant_type: "authorization_code",
-        // },
-        async request(context) {
-          console.log("Context 1", context);
-          // console.log("Context 1", context.client.clientSecret);
-          const tokens = await makeTokenRequest(context)
-          console.log('tokens: {}', tokens)
-          return { tokens }
+        url: `${process.env.BACKEND_URL}/auth/token`,
+        params: {
+          client_id: process.env.OAUTH_CLIENT_ID,
         },
       },
 
       // Userinfo endpoint
       userinfo: {
-        url: `${process.env.BACKEND_URL}/oauth/userinfo`,
+        url: `${process.env.BACKEND_URL}/auth/userinfo`,
       },
 
       // Profile mapping
@@ -156,7 +111,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     //     // Call backend logout to revoke tokens
     //     if (token?.accessToken) {
     //       try {
-    //         await fetch(`${process.env.BACKEND_URL}/oauth/logout`, {
+    //         await fetch(`${process.env.BACKEND_URL}/auth/logout`, {
     //           method: "POST",
     //           headers: {
     //             "Content-Type": "application/json",
@@ -181,7 +136,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 // Token refresh function
 async function refreshAccessToken(token: JWT): Promise<JWT> {
   try {
-    const response = await fetch(`${process.env.BACKEND_URL}/oauth/refresh`, {
+    const response = await fetch(`${process.env.BACKEND_URL}/auth/refresh`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
