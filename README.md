@@ -306,6 +306,25 @@ openssl rsa -in private.pem -pubout -out public.pem
 # Format for .env (replace newlines with \n)
 awk 'NF {sub(/\r/, ""); printf "%s\\n",$0;}' private.pem
 awk 'NF {sub(/\r/, ""); printf "%s\\n",$0;}' public.pem
+
+
+# 1. The Shortcut for Exponent (e)
+For standard 2048-bit RSA keys generated via openssl genrsa, the public exponent is virtually always 65537. When converted to Base64URL, this translates to a fixed constant:
+"e": "AQAB"
+You don't even need to run a command to extract e. It will always be "AQAB".
+
+# 2. Extract Modulus (n) via the Command Line
+
+## Option A: From your public.pem file (Easiest)
+openssl rsa -in public.pem -pubin -modulus -noout | cut -d= -f2 | xxd -r -p | base64 | tr -d '\n' | tr '/+' '_-' | tr -d '='
+
+## Option B: From your .env variable directly
+
+printf "%b" "$JWT_PUBLIC_KEY" | openssl rsa -pubin -modulus -noout | cut -d= -f2 | xxd -r -p | base64 | tr -d '\n' | tr '/+' '_-' | tr -d '='
+
+- No xxd on your machine? If your system throws a command not found: xxd error, you can use this native Python one-liner fallback (which uses only standard built-ins, no libraries required):
+
+openssl rsa -in public.pem -pubin -modulus -noout | cut -d= -f2 | python3 -c "import sys, base64; print(base64.urlsafe_b64encode(bytes.fromhex(sys.stdin.read().strip())).decode().rstrip('='))"
 ```
 
 ### 2. Backend Setup

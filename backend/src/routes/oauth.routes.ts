@@ -252,7 +252,8 @@ router.get("/.well-known/jwks.json", (req: Request, res: Response) => {
         use: "sig",
         alg: "RS256",
         kid: "key-1",
-        // Add your public key components here
+		e: "AQAB",
+		n: "iUeQbc1qpzFtycjYMVJgFXSDXiGydwYFur81WEQ8Js_bX1yzZ2Pt3cYM4tQUFhgz11GB3BtixinS0gzkPb1QYTR8BBbYKJWXuNcZ4pZ3E-YKd8b0l1-HnTcy7dgW3vwlvi6IVqXu2BznGP4j3nYwgl_VYyH7laVPzT5C8sX-n7rGmK85R_NgDNGHODHfp_zLa11DWQtpn4eclUkr-WlY-tOlRJDwLEnST3L0-EsOh68k5bkA7VyMMDi-n_u7v7jXbthmJF219cUfWFKXUIDaKdgLNw0qYTRK9_PqclVmt5By500ZP7V41XqNVaLy5XUw8L4sRO6SnVFS3v-OEX_giQ"
       },
     ],
   });

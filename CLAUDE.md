@@ -97,3 +97,12 @@ PostgreSQL with Prisma ORM. Models: `User`, `OAuthClient`, `AuthorizationCode`.
 - Authorization codes are single-use (reuse triggers token revocation)
 - Refresh tokens are rotated on each use
 - Rate limiting: global 100 req/15 min, OAuth endpoints 20 req/15 min
+
+
+## Git & Commit Messages
+
+- Use conventional commits format: type(scope): message
+    * Types: feat, fix, docs, style, refactor, test, chore, revert, chore, ci, perf, test
+    * Example: feat(auth): add login with Google
+- Keep commits atomic and focused.
+- Write commit messages in present tense.
