@@ -17,11 +17,17 @@
       "Bash(git fetch *)",
       "Bash(git checkout *)",
       "Bash(git switch *)",
+	  "Bash(ls:*)",
       "Bash(gh pr *)",
       "Bash(gh issue *)",
       "Bash(gh run *)"
     ],
     "deny": [
+	  "Bash(npm install *)",
+	  "Bash(npm uninstall *)",
+	  "Bash(rm *)",
+	  "Bash(rm -rf *)",
+	  "Bash(rmdir *)",
       "Read(**/.env)",
       "Read(**/.env.*)",
       "Read(**/secrets/**)",
