@@ -152,6 +152,7 @@ export class TokenService {
       expiresIn: oauthConfig.accessTokenExpiry,
       issuer: oauthConfig.issuer,
       audience: clientId,
+	  keyid: "key-v1", // <--- MUST match the 'kid' in your jwks.json
     });
   }
 
@@ -163,6 +164,7 @@ export class TokenService {
       {
         algorithm: "HS256",
         expiresIn: oauthConfig.refreshTokenExpiry,
+		keyid: "key-v1", // <--- MUST match the 'kid' in your jwks.json
       }
     );
   }
@@ -182,6 +184,7 @@ export class TokenService {
         expiresIn: oauthConfig.accessTokenExpiry,
         issuer: oauthConfig.issuer,
         audience: payload.audience,
+		keyid: "key-v1", // <--- MUST match the 'kid' in your jwks.json
       }
     );
   }

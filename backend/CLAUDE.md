@@ -51,7 +51,8 @@ This is an **OAuth2 Authorization Server** implementing **PKCE flow** with OpenI
 | `src/config/database.ts` | Prisma client with PG adapter |
 | `src/config/redis.ts` | Redis client singleton |
 | `src/services/token.service.ts` | Token generation/exchange logic |
-| `src/routes/auth.routes.ts` | OAuth endpoints (authorize, token, userinfo) |
+| `src/routes/oauth.routes.ts` | OAuth endpoints (authorize, token, userinfo) |
+| `src/routes/account.mgt.routes.ts` | User Account Managment endpoints (verify-email, forgot-password) |
 | `src/routes/client.routes.ts` | OAuth client registration |
 | `src/routes/api.routes.ts` | Protected API endpoints |
 | `src/middleware/authenticate.ts` | JWT authentication, scope/role authorization |
@@ -81,7 +82,7 @@ This is an **OAuth2 Authorization Server** implementing **PKCE flow** with OpenI
 | GET | `/oauth/userinfo` | User info (requires Bearer token) |
 | GET | `/oauth/.well-known/openid-configuration` | OIDC discovery |
 | GET | `/oauth/.well-known/jwks.json` | Public keys |
-| POST | `/api/register` | Register OAuth client |
+| POST | `/client/register` | Register OAuth client |
 | GET | `/api/health` | Health check (public) |
 | GET/POST | `/api/profile` | User profile (requires auth) |
 | GET | `/api/admin/users` | Admin users list (requires admin role) |
