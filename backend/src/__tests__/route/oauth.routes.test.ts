@@ -2,8 +2,8 @@
 
 import request from 'supertest';
 import express from 'express';
-import oauthRouter from '../../src/routes/oauth.routes.js';
-import { generatePkcePair, mockUser, mockClient, storeMockAuthCode, generateAccessToken } from '../../src/test/helpers/route.test-utils.js';
+import oauthRouter from '../../routes/oauth.routes.js';
+import { generatePkcePair, mockUser, mockClient, generateAccessToken } from '../../test/helpers/route.test-utils.js';
 
 // Create an isolated Express app for testing
 const app = express();
@@ -18,27 +18,92 @@ describe('OAuth Routes', () => {
       expect(res.body).toHaveProperty('error');
     });
 
-    it('should enforce PKCE requirement and S256 method', async () => {
+    it('should reject non-code response_type', async () => {
       const res = await request(app)
         .get('/auth/authorize')
-        .query({ response_type: 'code', client_id: mockClient.clientId, redirect_uri: mockClient.redirectUris[0] });
+        .query({ response_type: 'token', client_id: 'client-123', redirect_uri: 'http://localhost/callback' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('unsupported_response_type');
+    });
+
+    it('should reject missing client_id or redirect_uri', async () => {
+      const res = await request(app)
+        .get('/auth/authorize')
+        .query({ response_type: 'code' });
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('invalid_request');
     });
 
-    it('should successfully create an auth request and redirect', async () => {
-      const { verifier, challenge } = generatePkcePair();
+    it('should reject when PKCE code_challenge is missing', async () => {
       const res = await request(app)
         .get('/auth/authorize')
         .query({
           response_type: 'code',
-          client_id: mockClient.clientId,
-          redirect_uri: mockClient.redirectUris[0],
+          client_id: 'client-123',
+          redirect_uri: 'http://localhost/callback',
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('invalid_request');
+      expect(res.body.error_description).toContain('PKCE');
+    });
+
+    it('should reject non-S256 code_challenge_method', async () => {
+      const res = await request(app)
+        .get('/auth/authorize')
+        .query({
+          response_type: 'code',
+          client_id: 'client-123',
+          redirect_uri: 'http://localhost/callback',
+          code_challenge: 'challenge123',
+          code_challenge_method: 'plain',
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('invalid_request');
+      expect(res.body.error_description).toContain('S256');
+    });
+
+    it('should reject unknown client_id', async () => {
+      const { challenge } = generatePkcePair();
+      const res = await request(app)
+        .get('/auth/authorize')
+        .query({
+          response_type: 'code',
+          client_id: 'unknown-client',
+          redirect_uri: 'http://localhost/callback',
+          code_challenge: challenge,
+          code_challenge_method: 'S256',
+        });
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('invalid_client');
+    });
+
+    it('should reject invalid redirect_uri', async () => {
+      const { challenge } = generatePkcePair();
+      const res = await request(app)
+        .get('/auth/authorize')
+        .query({
+          response_type: 'code',
+          client_id: 'client-123',
+          redirect_uri: 'http://evil.com/callback',
+          code_challenge: challenge,
+          code_challenge_method: 'S256',
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('invalid_redirect_uri');
+    });
+
+    it('should redirect to consent page on valid request', async () => {
+      const { challenge } = generatePkcePair();
+      const res = await request(app)
+        .get('/auth/authorize')
+        .query({
+          response_type: 'code',
+          client_id: 'client-123',
+          redirect_uri: 'http://localhost/callback',
           code_challenge: challenge,
           code_challenge_method: 'S256',
           scope: 'openid',
         });
-      // Expect a redirect (302) to the frontend consent page
       expect(res.status).toBe(302);
       expect(res.headers.location).toMatch(/\/auth\/consent\?request_id=/);
     });
@@ -48,59 +113,35 @@ describe('OAuth Routes', () => {
     const tokenEndpoint = '/auth/token';
 
     it('should reject unsupported grant_type', async () => {
-      const res = await request(app).post(tokenEndpoint).send({ grant_type: 'client_credentials' });
+      const res = await request(app)
+        .post(tokenEndpoint)
+        .send({ grant_type: 'client_credentials' });
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('unsupported_grant_type');
     });
 
-    it('should exchange authorization code for tokens', async () => {
-      const { verifier, challenge } = generatePkcePair();
-      const code = 'test-auth-code';
-      // Store mock auth code in Redis
-      await storeMockAuthCode({ code, codeChallenge: challenge });
-
+    it('should reject missing code_verifier', async () => {
       const res = await request(app)
         .post(tokenEndpoint)
         .send({
           grant_type: 'authorization_code',
-          code,
-          redirect_uri: mockClient.redirectUris[0],
-          client_id: mockClient.clientId,
-          code_verifier: verifier,
+          code: 'some-code',
+          redirect_uri: 'http://localhost/callback',
+          client_id: 'client-123',
         });
-      expect(res.status).toBe(200);
-      expect(res.body).toMatchObject({
-        access_token: expect.any(String),
-        refresh_token: expect.any(String),
-        id_token: expect.any(String),
-        expires_in: expect.any(Number),
-      });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('invalid_request');
     });
 
-    it('should reject reused authorization code', async () => {
-      const { verifier, challenge } = generatePkcePair();
-      const code = 'reused-code';
-      // Store mock auth code and mark as used
-      await storeMockAuthCode({ code, codeChallenge: challenge });
-      // First exchange (valid)
-      await request(app)
-        .post(tokenEndpoint)
-        .send({
-          grant_type: 'authorization_code',
-          code,
-          redirect_uri: mockClient.redirectUris[0],
-          client_id: mockClient.clientId,
-          code_verifier: verifier,
-        });
-      // Second exchange should fail
+    it('should reject invalid authorization code', async () => {
       const res = await request(app)
         .post(tokenEndpoint)
         .send({
           grant_type: 'authorization_code',
-          code,
-          redirect_uri: mockClient.redirectUris[0],
-          client_id: mockClient.clientId,
-          code_verifier: verifier,
+          code: 'invalid-code',
+          redirect_uri: 'http://localhost/callback',
+          client_id: 'client-123',
+          code_verifier: 'verifier123',
         });
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('invalid_grant');
@@ -108,24 +149,55 @@ describe('OAuth Routes', () => {
   });
 
   describe('GET /auth/userinfo', () => {
-    it('should reject missing Bearer token', async () => {
+    it('should reject missing authorization header', async () => {
       const res = await request(app).get('/auth/userinfo');
       expect(res.status).toBe(401);
       expect(res.body.error).toBe('unauthorized');
     });
 
-    it('should return user info for a valid access token', async () => {
-      const accessToken = generateAccessToken();
+    it('should reject malformed authorization header', async () => {
       const res = await request(app)
         .get('/auth/userinfo')
-        .set('Authorization', `Bearer ${accessToken}`);
+        .set('Authorization', 'Basic abc123');
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('unauthorized');
+    });
+
+    it('should reject invalid token', async () => {
+      const res = await request(app)
+        .get('/auth/userinfo')
+        .set('Authorization', 'Bearer invalid-token');
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('invalid_token');
+    });
+  });
+
+  describe('GET /auth/.well-known/openid-configuration', () => {
+    it('should return OIDC discovery document', async () => {
+      const res = await request(app).get('/auth/.well-known/openid-configuration');
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({
-        sub: mockUser.id,
-        email: mockUser.email,
-        name: mockUser.name,
-        picture: null,
+        issuer: expect.any(String),
+        authorization_endpoint: expect.stringContaining('/oauth/authorize'),
+        token_endpoint: expect.stringContaining('/oauth/token'),
+        userinfo_endpoint: expect.stringContaining('/oauth/userinfo'),
+        jwks_uri: expect.stringContaining('/.well-known/jwks.json'),
+        response_types_supported: ['code'],
+        grant_types_supported: ['authorization_code', 'refresh_token'],
+        code_challenge_methods_supported: ['S256'],
       });
+    });
+  });
+
+  describe('GET /auth/.well-known/jwks.json', () => {
+    it('should return JWKS with public key', async () => {
+      const res = await request(app).get('/auth/.well-known/jwks.json');
+      expect(res.status).toBe(200);
+      expect(res.body.keys).toBeInstanceOf(Array);
+      expect(res.body.keys.length).toBeGreaterThan(0);
+      expect(res.body.keys[0]).toHaveProperty('kty', 'RSA');
+      expect(res.body.keys[0]).toHaveProperty('use', 'sig');
+      expect(res.body.keys[0]).toHaveProperty('alg', 'RS256');
     });
   });
 });

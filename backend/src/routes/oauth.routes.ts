@@ -152,7 +152,10 @@ async function handleAuthorizationCodeGrant(req: Request, res: Response) {
   // Retrieve and validate authorization code
   const codeData = await redis.get(`auth_code:${code}`);
   if (!codeData) {
-    throw new Error("Invalid or expired authorization code");
+    return res.status(400).json({
+      error: "invalid_grant",
+      error_description: "Invalid or expired authorization code",
+    });
   }
 
   const authData = JSON.parse(codeData);
